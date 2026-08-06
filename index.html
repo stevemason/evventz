@@ -3,13 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Upcoming Events</title>
+<title>Events</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <main>
-  <h1>Upcoming Events</h1>
+  <h1>Events</h1>
   <p class="subtitle">Concerts, comedy, whatever.</p>
+  <div class="view-toggle" role="tablist">
+    <button class="toggle-btn active" data-view="upcoming" role="tab" aria-selected="true">Upcoming</button>
+    <button class="toggle-btn" data-view="past" role="tab" aria-selected="false">Past</button>
+  </div>
   <div id="events"></div>
 </main>
 

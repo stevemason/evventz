@@ -48,6 +48,37 @@ p.subtitle {
   margin-bottom: 2rem;
 }
 
+.view-toggle {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  margin-bottom: 2rem;
+}
+
+.toggle-btn {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+}
+
+.toggle-btn:hover {
+  color: var(--text);
+}
+
+.toggle-btn.active {
+  color: #fff;
+  background: var(--accent);
+}
+
 .year-group {
   margin-bottom: 2rem;
 }
@@ -116,11 +147,10 @@ li.event.tentative {
 }
 
 .event-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 1rem;
-  flex-wrap: wrap;
 }
 
 .event-title {
@@ -130,7 +160,7 @@ li.event.tentative {
   color: var(--text);
 }
 
-.event-title:hover {
+a.event-title:hover {
   color: var(--accent);
 }
 
@@ -161,6 +191,10 @@ li.event.tentative {
   background: var(--accent);
   border-radius: 999px;
   padding: 0.05rem 0.5rem;
+}
+
+.event-countdown.past {
+  color: var(--muted);
 }
 
 .event-location {

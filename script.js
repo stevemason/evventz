@@ -1,6 +1,22 @@
+// Expects ISO "YYYY-MM-DD"; returns null (rather than an Invalid Date) on bad
+// input, including real-but-impossible dates like 2026-02-31.
 function parseDate(str) {
-  const [day, month, year] = str.split("-").map(Number);
-  return new Date(year, month - 1, day);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(str))) return null;
+  const [year, month, day] = String(str).split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function isTentative(e) {
+  return e.title.endsWith("(?)");
 }
 
 function formatDate(date) {
@@ -20,8 +36,8 @@ function formatDuration(n) {
     return `${weeks} week${weeks === 1 ? "" : "s"}`;
   }
 
-  const months = Math.round(n / 30.44);
-  if (months < 12) {
+  if (n < 365) {
+    const months = Math.round(n / 30.44);
     return `${months} month${months === 1 ? "" : "s"}`;
   }
 
@@ -38,6 +54,9 @@ function formatRelativeTime(daysUntil) {
   return `${formatDuration(-daysUntil)} ago`;
 }
 
+// events must be sorted by date (ascending or descending); groups come out in
+// the same order, with the empty months in between filled in. The first and
+// last entries define the month range that gets rendered.
 function groupByYearAndMonth(events) {
   const eventsByMonth = new Map();
   for (const e of events) {
@@ -48,60 +67,64 @@ function groupByYearAndMonth(events) {
 
   const first = events[0].parsedDate;
   const last = events[events.length - 1].parsedDate;
+  const start = first.getFullYear() * 12 + first.getMonth();
+  const end = last.getFullYear() * 12 + last.getMonth();
+  const step = start <= end ? 1 : -1;
 
   const years = [];
   let currentYear = null;
-  let cursorYear = first.getFullYear();
-  let cursorMonth = first.getMonth();
-  const endYear = last.getFullYear();
-  const endMonth = last.getMonth();
 
-  while (cursorYear < endYear || (cursorYear === endYear && cursorMonth <= endMonth)) {
-    if (!currentYear || currentYear.year !== cursorYear) {
-      currentYear = { year: cursorYear, months: [] };
+  for (let cursor = start; step > 0 ? cursor <= end : cursor >= end; cursor += step) {
+    const year = Math.floor(cursor / 12);
+    const month = cursor % 12;
+
+    if (currentYear?.year !== year) {
+      currentYear = { year, months: [] };
       years.push(currentYear);
     }
 
     currentYear.months.push({
-      month: cursorMonth,
-      events: eventsByMonth.get(`${cursorYear}-${cursorMonth}`) || [],
+      month,
+      events: eventsByMonth.get(`${year}-${month}`) || [],
     });
-
-    cursorMonth++;
-    if (cursorMonth > 11) {
-      cursorMonth = 0;
-      cursorYear++;
-    }
   }
 
   return years;
 }
 
-function reverseGroups(years) {
-  return years
-    .slice()
-    .reverse()
-    .map((y) => ({
-      year: y.year,
-      months: y.months
-        .slice()
-        .reverse()
-        .map((m) => ({
-          month: m.month,
-          events: m.events.slice().reverse(),
-        })),
-    }));
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[c]));
+}
+
+function safeUrl(url) {
+  try {
+    const parsed = new URL(url, location.href);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.href;
+    }
+  } catch {
+    // fall through
+  }
+  return null;
 }
 
 function renderEvent(e) {
-  const tentative = e.title.endsWith("(?)");
+  const tentative = isTentative(e);
   const title = tentative ? e.title.slice(0, -3).trim() : e.title;
   const soon = e.daysUntil >= 0 && e.daysUntil <= 7;
   const past = e.daysUntil < 0;
-  const titleContent = `${title}${tentative ? '<span class="tentative-badge">Tentative</span>' : ""}`;
-  const titleHtml = e.url && !past
-    ? `<a class="event-title" href="${e.url}" target="_blank" rel="noopener">${titleContent}</a>`
-    : `<span class="event-title">${titleContent}</span>`;
+  const badge = tentative ? '<span class="tentative-badge">Tentative</span>' : "";
+  const url = e.url ? safeUrl(e.url) : null;
+  const titleLink = url && !past
+    ? `<a class="event-title" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a>`
+    : `<span class="event-title">${escapeHtml(title)}</span>`;
+  const titleHtml = `<span class="event-title-wrap">${titleLink}${badge}</span>`;
 
   return `
     <li class="event${tentative ? " tentative" : ""}">
@@ -112,15 +135,15 @@ function renderEvent(e) {
           <span class="event-countdown${soon ? " soon" : ""}${past ? " past" : ""}">${formatRelativeTime(e.daysUntil)}</span>
         </div>
       </div>
-      ${e.location ? `<div class="event-location">${e.location}</div>` : ""}
+      ${e.location ? `<div class="event-location">${escapeHtml(e.location)}</div>` : ""}
     </li>
   `;
 }
 
-const monthNames = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
+// Locale-derived so month headers match the formatDate locale.
+const monthNames = Array.from({ length: 12 }, (_, m) =>
+  new Date(2000, m, 1).toLocaleDateString(undefined, { month: "long" })
+);
 
 function renderGroups(years, { showEmptyMonths = true } = {}) {
   return years
@@ -157,58 +180,76 @@ function renderGroups(years, { showEmptyMonths = true } = {}) {
     .join("");
 }
 
-async function loadEvents() {
-  const list = document.getElementById("events");
-  try {
-    const res = await fetch("data.json");
-    const events = await res.json();
+const list = document.getElementById("events");
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+// Reassigned once data loads (or fails to), so the toggle buttons work
+// regardless of how the fetch went.
+let render = () => {};
 
-    const withDates = events
-      .map((e) => ({ ...e, parsedDate: parseDate(e.date) }))
-      .map((e) => ({
-        ...e,
-        daysUntil: Math.round((e.parsedDate - today) / 86400000),
-      }));
-
-    const upcoming = withDates
-      .filter((e) => e.daysUntil >= 0)
-      .sort((a, b) => a.parsedDate - b.parsedDate);
-
-    const past = withDates
-      .filter((e) => e.daysUntil < 0 && !e.title.endsWith("(?)"))
-      .sort((a, b) => a.parsedDate - b.parsedDate);
-
-    const upcomingGroups = upcoming.length ? groupByYearAndMonth(upcoming) : [];
-    const pastGroups = past.length ? reverseGroups(groupByYearAndMonth(past)) : [];
-
-    function render(view) {
-      const groups = view === "past" ? pastGroups : upcomingGroups;
-      const emptyMessage = view === "past" ? "No past events." : "No upcoming events.";
-      list.innerHTML = groups.length === 0
-        ? `<p class="empty">${emptyMessage}</p>`
-        : renderGroups(groups, { showEmptyMonths: view !== "past" });
-    }
-
-    render("upcoming");
-
-    document.querySelectorAll(".toggle-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".toggle-btn").forEach((b) => {
-          b.classList.remove("active");
-          b.setAttribute("aria-selected", "false");
-        });
-        btn.classList.add("active");
-        btn.setAttribute("aria-selected", "true");
-        render(btn.dataset.view);
-      });
+document.querySelectorAll(".toggle-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".toggle-btn").forEach((b) => {
+      b.classList.remove("active");
+      b.setAttribute("aria-pressed", "false");
     });
-  } catch (err) {
-    list.innerHTML = '<p class="error">Could not load events.</p>';
-    console.error(err);
-  }
-}
+    btn.classList.add("active");
+    btn.setAttribute("aria-pressed", "true");
+    render(btn.dataset.view);
+  });
+});
 
-loadEvents();
+try {
+  const res = await fetch("data.json", { cache: "no-cache" });
+  if (!res.ok) throw new Error(`Failed to fetch data.json: ${res.status}`);
+  const events = await res.json();
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const withDates = [];
+  for (const e of events) {
+    if (typeof e.title !== "string" || !e.title.trim()) {
+      console.warn("Skipping event with missing title:", e);
+      continue;
+    }
+    const parsedDate = parseDate(e.date);
+    if (!parsedDate) {
+      console.warn(`Skipping event with invalid date "${e.date}": ${e.title}`);
+      continue;
+    }
+    withDates.push({
+      ...e,
+      parsedDate,
+      daysUntil: Math.round((parsedDate - today) / 86400000),
+    });
+  }
+
+  const upcoming = withDates
+    .filter((e) => e.daysUntil >= 0)
+    .sort((a, b) => a.parsedDate - b.parsedDate);
+
+  // Tentative events are dropped once their date passes (rather than moving to
+  // the past view), since there's no record of whether they were actually attended.
+  const past = withDates
+    .filter((e) => e.daysUntil < 0 && !isTentative(e))
+    .sort((a, b) => b.parsedDate - a.parsedDate);
+
+  const upcomingGroups = upcoming.length ? groupByYearAndMonth(upcoming) : [];
+  const pastGroups = past.length ? groupByYearAndMonth(past) : [];
+
+  render = (view) => {
+    const groups = view === "past" ? pastGroups : upcomingGroups;
+    const emptyMessage = view === "past" ? "No past events." : "No upcoming events.";
+    list.innerHTML = groups.length === 0
+      ? `<p class="empty">${emptyMessage}</p>`
+      : renderGroups(groups, { showEmptyMonths: view !== "past" });
+  };
+
+  render(document.querySelector(".toggle-btn.active").dataset.view);
+} catch (err) {
+  console.error(err);
+  render = () => {
+    list.innerHTML = '<p class="error">Could not load events.</p>';
+  };
+  render();
+}

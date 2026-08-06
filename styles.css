@@ -6,6 +6,7 @@
   --muted: #666666;
   --border: #e2e2e2;
   --accent: #4a5cff;
+  --accent-contrast: #ffffff;
   --tentative-bg: #fff9e8;
   --tentative-border: #e8d68a;
 }
@@ -17,6 +18,7 @@
     --muted: #9a9a9a;
     --border: #33333a;
     --accent: #8b9bff;
+    --accent-contrast: #16161a;
     --tentative-bg: #2a2610;
     --tentative-border: #59502a;
   }
@@ -75,7 +77,7 @@ p.subtitle {
 }
 
 .toggle-btn.active {
-  color: #fff;
+  color: var(--accent-contrast);
   background: var(--accent);
 }
 
@@ -187,7 +189,7 @@ a.event-title:hover {
 }
 
 .event-countdown.soon {
-  color: #fff;
+  color: var(--accent-contrast);
   background: var(--accent);
   border-radius: 999px;
   padding: 0.05rem 0.5rem;
@@ -209,7 +211,7 @@ a.event-title:hover {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #8a7000;
+  color: #6b5200;
   background: #f2e6a8;
   border-radius: 999px;
   padding: 0.1rem 0.5rem;

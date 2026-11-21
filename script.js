@@ -19,6 +19,10 @@ function isTentative(e) {
   return e.title.endsWith("(?)");
 }
 
+function displayTitle(e) {
+  return isTentative(e) ? e.title.slice(0, -3).trim() : e.title;
+}
+
 function formatDate(date) {
   return date.toLocaleDateString(undefined, {
     weekday: "short",
@@ -116,7 +120,7 @@ function safeUrl(url) {
 
 function renderEvent(e) {
   const tentative = isTentative(e);
-  const title = tentative ? e.title.slice(0, -3).trim() : e.title;
+  const title = displayTitle(e);
   const soon = e.daysUntil >= 0 && e.daysUntil <= 7;
   const past = e.daysUntil < 0;
   const badge = tentative ? '<span class="tentative-badge">Tentative</span>' : "";
@@ -145,27 +149,128 @@ const monthNames = Array.from({ length: 12 }, (_, m) =>
   new Date(2000, m, 1).toLocaleDateString(undefined, { month: "long" })
 );
 
-function renderGroups(years, { showEmptyMonths = true } = {}) {
+// Weeks start on Monday (getDay() index).
+const weekStart = 1;
+
+// 2001-01-07 was a Sunday, so day d of that week has getDay() === d.
+const weekdays = Array.from({ length: 7 }, (_, i) => {
+  const date = new Date(2001, 0, 7 + ((weekStart + i) % 7));
+  return {
+    narrow: date.toLocaleDateString(undefined, { weekday: "narrow" }),
+    long: date.toLocaleDateString(undefined, { weekday: "long" }),
+    weekend: date.getDay() === 0 || date.getDay() === 6,
+  };
+});
+
+// Built once: the header row is the same for every month.
+const calendarHead = weekdays
+  .map((w) => `<th scope="col" abbr="${escapeHtml(w.long)}">${escapeHtml(w.narrow)}</th>`)
+  .join("");
+
+function eventsByDay(events) {
+  const byDay = new Map();
+  for (const e of events) {
+    const d = e.parsedDate.getDate();
+    byDay.set(d, [...(byDay.get(d) || []), e]);
+  }
+  return byDay;
+}
+
+function dayLabel(day, month, dayEvents) {
+  const names = dayEvents
+    .map((e) => displayTitle(e) + (isTentative(e) ? " (tentative)" : ""))
+    .join(", ");
+  return escapeHtml(`${day} ${monthNames[month]}: ${names}`);
+}
+
+// dayEvents is empty for days without events.
+function renderDayCell({ day, month, column, dayEvents, isToday }) {
+  const classes = [];
+  const attrs = [];
+
+  if (weekdays[column].weekend) classes.push("weekend");
+
+  if (dayEvents.length > 0) {
+    classes.push(dayEvents.some((e) => !isTentative(e)) ? "has-event" : "has-tentative");
+    const label = dayLabel(day, month, dayEvents);
+    attrs.push(`title="${label}"`, `aria-label="${label}"`);
+  }
+
+  if (isToday) {
+    classes.push("today");
+    attrs.push('aria-current="date"');
+  }
+
+  if (classes.length > 0) attrs.unshift(`class="${classes.join(" ")}"`);
+  return `<${["td", ...attrs].join(" ")}><span>${day}</span></td>`;
+}
+
+function renderCalendar(year, month, events, today) {
+  const byDay = eventsByDay(events);
+  const leading = (new Date(year, month, 1).getDay() - weekStart + 7) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const totalCells = Math.ceil((leading + daysInMonth) / 7) * 7;
+  const todayDay =
+    today.getFullYear() === year && today.getMonth() === month ? today.getDate() : null;
+
+  const cells = Array.from({ length: totalCells }, (_, i) => {
+    const day = i - leading + 1;
+    if (day < 1 || day > daysInMonth) return '<td class="blank"></td>';
+    return renderDayCell({
+      day,
+      month,
+      column: i % 7,
+      dayEvents: byDay.get(day) || [],
+      isToday: day === todayDay,
+    });
+  });
+
+  const rows = Array.from(
+    { length: totalCells / 7 },
+    (_, w) => `<tr>${cells.slice(w * 7, w * 7 + 7).join("")}</tr>`
+  );
+
+  return `
+    <table class="calendar" aria-label="${escapeHtml(`${monthNames[month]} ${year}`)}">
+      <thead><tr>${calendarHead}</tr></thead>
+      <tbody>${rows.join("")}</tbody>
+    </table>
+  `;
+}
+
+function renderMonth(year, m, { showCalendar, today }) {
+  if (m.events.length === 0) {
+    return `
+      <div class="month-group month-empty">
+        <h3 class="month-header">${monthNames[m.month]} <span class="no-events">No events</span></h3>
+      </div>
+    `;
+  }
+
+  let body = `<ul class="events">${m.events.map(renderEvent).join("")}</ul>`;
+  if (showCalendar) {
+    body = `
+      <div class="month-body">
+        ${renderCalendar(year, m.month, m.events, today)}
+        ${body}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="month-group">
+      <h3 class="month-header">${monthNames[m.month]}</h3>
+      ${body}
+    </div>
+  `;
+}
+
+function renderGroups(years, { showEmptyMonths = true, showCalendar = true, today = new Date() } = {}) {
   return years
     .map((y) => {
       const monthsHtml = y.months
         .filter((m) => showEmptyMonths || m.events.length > 0)
-        .map((m) =>
-          m.events.length === 0
-            ? `
-              <div class="month-group month-empty">
-                <h3 class="month-header">${monthNames[m.month]} <span class="no-events">No events</span></h3>
-              </div>
-            `
-            : `
-              <div class="month-group">
-                <h3 class="month-header">${monthNames[m.month]}</h3>
-                <ul class="events">
-                  ${m.events.map(renderEvent).join("")}
-                </ul>
-              </div>
-            `
-        )
+        .map((m) => renderMonth(y.year, m, { showCalendar, today }))
         .join("");
 
       if (!monthsHtml) return "";
@@ -242,7 +347,11 @@ try {
     const emptyMessage = view === "past" ? "No past events." : "No upcoming events.";
     list.innerHTML = groups.length === 0
       ? `<p class="empty">${emptyMessage}</p>`
-      : renderGroups(groups, { showEmptyMonths: view !== "past" });
+      : renderGroups(groups, {
+          showEmptyMonths: view !== "past",
+          showCalendar: view !== "past",
+          today,
+        });
   };
 
   render(document.querySelector(".toggle-btn.active").dataset.view);

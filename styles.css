@@ -9,6 +9,7 @@
   --accent-contrast: #ffffff;
   --tentative-bg: #fff9e8;
   --tentative-border: #e8d68a;
+  --tentative-text: #6b5200;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -21,6 +22,7 @@
     --accent-contrast: #16161a;
     --tentative-bg: #2a2610;
     --tentative-border: #59502a;
+    --tentative-text: #e8d68a;
   }
 }
 
@@ -126,6 +128,91 @@ p.subtitle {
   font-style: italic;
 }
 
+.month-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 560px) {
+  .month-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+table.calendar {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.5rem 0.6rem 0.6rem;
+  border-collapse: separate;
+  border-spacing: 4px;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  justify-self: start;
+}
+
+@media (max-width: 560px) {
+  table.calendar {
+    justify-self: center;
+  }
+}
+
+.calendar th {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 0 0.25rem;
+  text-align: center;
+}
+
+.calendar td {
+  padding: 0;
+  text-align: center;
+}
+
+.calendar td > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  color: var(--text);
+}
+
+.calendar td.weekend > span {
+  color: var(--muted);
+}
+
+.calendar td.has-event > span {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+  cursor: default;
+}
+
+.calendar td.has-tentative > span {
+  background: var(--tentative-bg);
+  border: 1px dashed var(--tentative-text);
+  color: var(--tentative-text);
+  font-weight: 600;
+  cursor: default;
+}
+
+.calendar td.today > span {
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.calendar td.today.has-event > span,
+.calendar td.today.has-tentative > span {
+  box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--accent);
+}
+
 ul.events {
   list-style: none;
   margin: 0;
@@ -211,7 +298,7 @@ a.event-title:hover {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #6b5200;
+  color: var(--tentative-text);
   background: #f2e6a8;
   border-radius: 999px;
   padding: 0.1rem 0.5rem;
@@ -221,7 +308,6 @@ a.event-title:hover {
 
 @media (prefers-color-scheme: dark) {
   .tentative-badge {
-    color: #e8d68a;
     background: #4a3f14;
   }
 }
